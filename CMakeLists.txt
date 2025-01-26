@@ -1,40 +1,85 @@
-cmake_minimum_required(VERSION 3.1) # Проверка версии CMake.
-									# Если версия установленой программы
-									# старее указаной, произайдёт аварийный выход.
+cmake_minimum_required(VERSION 3.4...3.28 FATAL_ERROR)
 
-project(Pong_GLFW)		# Название проекта
+project(PONG-GLFW VERSION 0.1.0 LANGUAGES C HOMEPAGE_URL "https://github.com/b3r8t3r/Pong-GLFW")
+
+set(CMAKE_C_STANDARD 99)
+
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+
+# ===============
+# GLFW
+# ===============
+
+include(FetchContent)
+
+FetchContent_Declare(
+        glfw
+        GIT_REPOSITORY https://github.com/glfw/glfw.git
+        GIT_TAG 3.4
+)
+
+FetchContent_MakeAvailable(
+        glfw
+)
 
 find_package(OpenGL REQUIRED)
 
-include_directories(${OPENGL_INCLUDE_DIRS})
-
 set( GLFW_BUILD_DOCS OFF CACHE BOOL  "GLFW lib only" )
 set( GLFW_INSTALL OFF CACHE BOOL  "GLFW lib only" )
-set( GLAD_GL "" )
 
-add_subdirectory( glfw )
+# ===============
+# Libraries
+# ===============
 
-option( PONG-GLFW-USE-GLFW-GLAD "Use GLAD from GLFW" ON )
+# ---------------
+# Types
+# ---------------
 
-if( PONG-GLFW-USE-GLFW-GLAD )
-    include_directories("${GLFW_SOURCE_DIR}/deps")
-    set( GLAD_GL "${GLFW_SOURCE_DIR}/deps/glad/gl.h" )
+add_library(TYPES STATIC src/types.c)
+
+target_include_directories(TYPES PUBLIC ${CMAKE_SOURCE_DIR}/include)
+
+# ---------------
+# Square
+# ---------------
+
+add_library(SQUARE STATIC src/square_lib.c)
+
+target_include_directories(SQUARE
+    PUBLIC 
+        ${CMAKE_SOURCE_DIR}/include
+)
+
+target_link_libraries(SQUARE PRIVATE OpenGL::GL glfw)
+
+# ===============
+# Tests
+# ===============
+
+option(PONG_BUILD_TESTS "Build the Pong tests" TRUE)
+
+if (PONG_BUILD_TESTS)
+#        add_executable(TESTS-CONSOLE WIN32 tests/tests.c)
+#        target_include_directories(TESTS-CONSOLE PRIVATE ${CMAKE_SOURCE_DIR}/include)
+#        target_link_libraries(TESTS-CONSOLE PRIVATE TYPES)
+        add_subdirectory(tests)
 endif()
 
-if( MSVC )
-    SET( CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /ENTRY:mainCRTStartup" )
-endif()
+# ===============
+# Application
+# ===============
+add_executable(PONG-GLFW WIN32 src/main.c)
 
-set( PONG-GLFW-SRC
-        main.c
-        )
+target_include_directories(PONG-GLFW PRIVATE ${CMAKE_SOURCE_DIR}/include)
 
-add_executable( PONG-GLFW WIN32 ${PONG-GLFW-SRC} ${GLAD_GL} )
-target_link_libraries( PONG-GLFW ${OPENGL_LIBRARIES} glfw )
-if( MSVC )
-    if(${CMAKE_VERSION} VERSION_LESS "3.6.0")
-        message( "\n\t[ WARNING ]\n\n\tCMake version lower than 3.6.\n\n\t - Please update CMake and rerun; OR\n\t - Manually set 'PONG-GLFW' as StartUp Project in Visual Studio.\n" )
-    else()
-        set_property( DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT PONG-GLFW )
-    endif()
+target_link_libraries(PONG-GLFW PRIVATE SQUARE OpenGL::GL glfw)
+
+if (MSVC)
+    # Tell MSVC to use main instead of WinMain
+    set_target_properties(PONG-GLFW PROPERTIES
+                          LINK_FLAGS "/ENTRY:mainCRTStartup")
+elseif (CMAKE_C_SIMULATE_ID STREQUAL "MSVC")
+    # Tell Clang using MS CRT to use main instead of WinMain
+    set_target_properties(PONG-GLFW PROPERTIES
+                          LINK_FLAGS "-Wl,/entry:mainCRTStartup")
 endif()
